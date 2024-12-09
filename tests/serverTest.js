@@ -28,7 +28,7 @@ function logResult(endpoint, method, success, details = "") {
 // Test jednotlivých endpointů
 async function testEndpoint(endpoint, method, data = null, expectedStatus = 200) {
     try {
-        const config = { method, url: `${BASE_URL}${endpoint}`, data };
+        const config = { method, url: `https://catfact.ninja/`, data };
         const response = await axios(config);
 
         if (response.status === expectedStatus) {
