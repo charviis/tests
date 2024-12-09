@@ -3,21 +3,16 @@ const colors = require("ansi-colors");
 const fs = require("fs");
 const readline = require("readline");
 const chrome = require("selenium-webdriver/chrome");
-const fetch = require("node-fetch"); // Přidání node-fetch
+const runServerTests = require("./serverTest"); // Import serverových testů
 
 let options = new chrome.Options();
-options.addArguments("--disable-gpu");
-options.addArguments("--disable-software-rasterizer");
-options.addArguments("--use-gl=swiftshader");
-options.addArguments("--disable-dev-shm-usage");
-options.addArguments("--headless");
+options.addArguments("--disable-gpu"); // Zakáže GPU akceleraci
+options.addArguments("--disable-software-rasterizer"); // Zakáže SW rasterizaci
+options.addArguments("--headless"); // Pokud testuješ bez UI
 
-
-const TEST_URL = "https://webtesting.free.beeceptor.com"; // Zadaná URL pro testy
-const API_URL = "https://webtesting.free.beeceptor.com"; // Příklad URL API pro fetch test
-
+const TEST_URL = "https://catfact.ninja/"; // Zadaná URL pro testy
+const TEST_API = "https://catfact.ninja/";
 async function runGUITests() {
-    console.log(colors.blue("\n=== Spouštím GUI testy ===\n"));
     let driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
     const testLog = []; // Pole pro ukládání výsledků testů
 
@@ -28,45 +23,32 @@ async function runGUITests() {
     });
 
     try {
-        // Test 1: Otevření stránky
+        // GUI Testy
         await logTest(testLog, "[TEST] Načtení stránky", async () => {
             await driver.get(TEST_URL);
         });
 
-        // Test 2: Kontrola existence formuláře
         await logTest(testLog, "[TEST] Kontrola existence formuláře (#myForm)", async () => {
             await driver.findElement(By.css("#myForm"));
         });
 
-        // Test 3: Kontrola existence tlačítka "Odeslat"
         await logTest(testLog, "[TEST] Kontrola existence tlačítka 'Odeslat'", async () => {
             await driver.findElement(By.css("button[type='submit']"));
         });
 
-        // Test 4: Kontrola nadpisu stránky
         await logTest(testLog, "[TEST] Kontrola nadpisu stránky", async () => {
             const title = await driver.getTitle();
             if (!title) throw new Error("Nadpis stránky nebyl nalezen.");
         });
 
-        // Test 5: Viditelnost prvku s faktem
         await logTest(testLog, "[TEST] Kontrola viditelnosti prvku s faktem (.fact-display)", async () => {
             const factElement = await driver.findElement(By.css(".fact-display"));
             const isDisplayed = await factElement.isDisplayed();
             if (!isDisplayed) throw new Error("Element není viditelný.");
         });
 
-        // Test 6: Fetch API test
-        await logTest(testLog, "[TEST] API Fetch na " + API_URL, async () => {
-            const response = await fetch(API_URL);
-            if (!response.ok) {
-                throw new Error(`API odpovědělo s chybovým stavem: ${response.status}`);
-            }
-            const data = await response.json();
-            if (!data || !data.fact) {
-                throw new Error("API nevrátilo očekávaná data.");
-            }
-        });
+        // Spuštění serverových testů
+        await runServerTests(testLog);
     } catch (err) {
         console.error(colors.red("✗ Chyba během provádění testů: " + err.message));
         saveErrorToFile(err);
@@ -75,14 +57,13 @@ async function runGUITests() {
     }
 
     // Výpis všech provedených testů
-    console.log(colors.blue("\n=== Přehled všech testů ==="));
     let failedTests = 0;
     testLog.forEach(({ description, result, error }) => {
         if (result === "PASSED") {
             console.log(colors.green(`✓ ${description}`));
         } else {
             failedTests++;
-            console.log(colors.red(`✗ ${description} - Chyba: ${error}`));
+            console.error(colors.red(`✗ ${description} - Chyba: ${error}`));
         }
     });
 
@@ -100,7 +81,7 @@ async function logTest(testLog, description, testFn) {
         testLog.push({ description, result: "PASSED" });
     } catch (err) {
         testLog.push({ description, result: "FAILED", error: err.message });
-        console.error(colors.red(`✗ ${description} - Chyba: ${err.message}`)); // Okamžitý výpis selhání
+        saveErrorToFile(err); // Uložení chyby do souboru
     }
 }
 

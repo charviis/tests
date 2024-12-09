@@ -1,6 +1,6 @@
 const axios = require("axios");
 
-const BASE_URL = "https://catfact.ninja/"; // Změň podle svého API
+const BASE_URL = "https://catfact.ninja"; // URL pro Cat Facts API
 
 // Funkce pro nativní stylování konzole
 function logWithColor(color, message) {
@@ -25,14 +25,27 @@ function logResult(endpoint, method, success, details = "") {
     }
 }
 
+// Funkce pro logování faktu o kočkách
+function logCatFact(fact) {
+    logWithColor("green", `   Fact: ${fact}`);
+}
+
 // Test jednotlivých endpointů
 async function testEndpoint(endpoint, method, data = null, expectedStatus = 200) {
     try {
-        const config = { method, url: `https://webtesting.free.beeceptor.com`, data };
+        const config = { method, url: `${BASE_URL}${endpoint}`, data };
         const response = await axios(config);
 
         if (response.status === expectedStatus) {
             logResult(endpoint, method, true);
+            if (endpoint === "/facts") {
+                // Pokud je endpoint /facts, vypíšeme náhodný fakt o kočkách
+                logCatFact(response.data.fact);
+            }
+            if (endpoint === "/fact") {
+                // Pokud je endpoint /fact, vypíšeme jeden fakt o kočkách
+                logCatFact(response.data.fact);
+            }
         } else {
             logResult(endpoint, method, false, `Expected ${expectedStatus}, got ${response.status}`);
         }
@@ -46,12 +59,9 @@ async function testEndpoint(endpoint, method, data = null, expectedStatus = 200)
 async function runServerTests() {
     logWithColor("blue", "\n=== Spouštím serverové testy ===\n");
 
-    // Přidání testů pro různé scénáře
-    await testEndpoint("/api/users", "GET", null, 200); // Ověření, že získáme uživatele
-    await testEndpoint("/api/users/1", "GET", null, 200); // Ověření, že uživatel s ID 1 existuje
-    await testEndpoint("/api/users", "POST", { name: "Test User", age: 30 }, 201); // Přidání nového uživatele
-    await testEndpoint("/api/users/999", "GET", null, 404); // Ověření, že neexistující uživatel vrací 404
-    await testEndpoint("/api/users/1", "DELETE", null, 204); // Smazání uživatele
+    // Testy pro různé endpointy
+    await testEndpoint("/facts", "GET", null, 200); // Získání náhodného faktu o kočkách
+    await testEndpoint("/fact", "GET", null, 200); // Získání jednoho faktu o kočkách
 
     logWithColor("blue", "\n=== Testování dokončeno ===");
 }
