@@ -3,6 +3,7 @@ const colors = require("ansi-colors");
 const fs = require("fs");
 const readline = require("readline");
 const chrome = require("selenium-webdriver/chrome");
+const axios = require("axios");
 const runServerTests = require("./serverTest"); // Import serverových testů
 
 let options = new chrome.Options();
@@ -11,7 +12,8 @@ options.addArguments("--disable-software-rasterizer"); // Zakáže SW rasterizac
 options.addArguments("--headless"); // Pokud testuješ bez UI
 
 const TEST_URL = "https://catfact.ninja/"; // Zadaná URL pro testy
-const TEST_API = "https://catfact.ninja/";
+const TEST_API = "https://catfact.ninja/fact"; // API pro náhodný fakt o kočkách
+
 async function runGUITests() {
     let driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
     const testLog = []; // Pole pro ukládání výsledků testů
@@ -47,6 +49,11 @@ async function runGUITests() {
             if (!isDisplayed) throw new Error("Element není viditelný.");
         });
 
+        // Výpis faktů o kočkách z API
+        await logTest(testLog, "[TEST] Získání náhodného faktu o kočkách z API", async () => {
+            await displayCatFact();
+        });
+
         // Spuštění serverových testů
         await runServerTests(testLog);
     } catch (err) {
@@ -75,6 +82,20 @@ async function runGUITests() {
     }
 }
 
+async function displayCatFact() {
+    try {
+        const response = await axios.get(TEST_API);
+        if (response.data && response.data.fact) {
+            console.log(colors.green(`Kočičí fakt: ${response.data.fact}`));
+        } else {
+            throw new Error("Nepodařilo se získat fakt o kočkách.");
+        }
+    } catch (error) {
+        console.error(colors.red("✗ Chyba při získávání kočičího faktu z API: " + error.message));
+        saveErrorToFile(error); // Uložení chyby do souboru
+    }
+}
+
 async function logTest(testLog, description, testFn) {
     try {
         await testFn();
@@ -92,7 +113,7 @@ function saveErrorToFile(error) {
         timestamp: new Date().toISOString(),
     };
 
-    const filePath = "errors.json";
+    const filePath = "./reports/errors.json";
     let errors = [];
 
     // Načtení existujících chyb (pokud soubor existuje)
