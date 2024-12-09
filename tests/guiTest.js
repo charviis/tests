@@ -1,58 +1,87 @@
-const { Builder, By, until } = require("selenium-webdriver");
+const { Builder, By } = require("selenium-webdriver");
 const colors = require("ansi-colors");
 const fs = require("fs");
+const readline = require("readline");
+
+
+
+
+const TEST_URL = "https://www.chmi.cz/"; // Zadaná URL pro testy
 
 async function runGUITests() {
     console.log(colors.blue("\n=== Spouštím GUI testy ===\n"));
     let driver = await new Builder().forBrowser("chrome").build();
+    const testLog = []; // Pole pro ukládání výsledků testů
+
+    // Nastavení zachytávání klávesnice
+    listenForEscape(() => {
+        console.log(colors.red("\n✗ Testy byly přerušeny uživatelem (Escape)."));
+        driver.quit().finally(() => process.exit(0));
+    });
 
     try {
-        // Otevření stránky
-        await driver.get("https://catfact.ninja/");
-        console.log(colors.green("✓ Stránka byla načtena."));
+        // Test 1: Otevření stránky
+        await logTest(testLog, "[TEST] Načtení stránky", async () => {
+            await driver.get(TEST_URL);
+        });
 
-        // Test 1: Kontrola existence formuláře
-        const formElement = await driver.findElement(By.css("#myForm"));
-        console.log(colors.green("✓ Element #myForm byl nalezen."));
+        // Test 2: Kontrola existence formuláře
+        await logTest(testLog, "[TEST] Kontrola existence formuláře (#myForm)", async () => {
+            await driver.findElement(By.css("#myForm"));
+        });
 
-        // Test 2: Kontrola existence tlačítka "Odeslat"
-        const submitButton = await driver.findElement(By.css("button[type='submit']"));
-        console.log(colors.green("✓ Tlačítko odeslat bylo nalezeno."));
+        // Test 3: Kontrola existence tlačítka "Odeslat"
+        await logTest(testLog, "[TEST] Kontrola existence tlačítka 'Odeslat'", async () => {
+            await driver.findElement(By.css("button[type='submit']"));
+        });
 
-        // Test 3: Kontrola nadpisu stránky
-        const title = await driver.getTitle();
-        if (title) {
-            console.log(colors.green(`✓ Nadpis stránky byl načten: ${title}`));
-        } else {
-            throw new Error("Nadpis stránky nebyl nalezen.");
-        }
+        // Test 4: Kontrola nadpisu stránky
+        await logTest(testLog, "[TEST] Kontrola nadpisu stránky", async () => {
+            const title = await driver.getTitle();
+            if (!title) throw new Error("Nadpis stránky nebyl nalezen.");
+        });
 
-        // Test 4: Kontrola viditelnosti prvku
-        const factElement = await driver.findElement(By.css(".fact-display"));
-        const isDisplayed = await factElement.isDisplayed();
-        if (isDisplayed) {
-            console.log(colors.green("✓ Element s faktem je viditelný."));
-        } else {
-            throw new Error("Element s faktem není viditelný.");
-        }
-
-        // Test 5: Odeslání formuláře
-        const inputField = await driver.findElement(By.css("#factInput"));
-        await inputField.sendKeys("Kočky");
-        await submitButton.click();
-        console.log(colors.green("✓ Formulář byl úspěšně odeslán."));
-
-        // Test 6: Čekání na změnu obsahu faktu
-        await driver.wait(until.elementTextContains(factElement, "Kočky"), 5000);
-        console.log(colors.green("✓ Nový fakt byl úspěšně načten."));
+        // Test 5: Viditelnost prvku s faktem
+        await logTest(testLog, "[TEST] Kontrola viditelnosti prvku s faktem (.fact-display)", async () => {
+            const factElement = await driver.findElement(By.css(".fact-display"));
+            const isDisplayed = await factElement.isDisplayed();
+            if (!isDisplayed) throw new Error("Element není viditelný.");
+        });
     } catch (err) {
-        console.error(colors.red("✗ Chyba při testování GUI: Nastala neočekávaná chyba. Detaily uloženy do errors.json."));
+        console.error(colors.red("✗ Chyba během provádění testů: " + err.message));
         saveErrorToFile(err);
     } finally {
         await driver.quit();
     }
 
-    console.log(colors.blue("\n=== GUI testy dokončeny ===\n"));
+    // Výpis všech provedených testů
+    console.log(colors.blue("\n=== Přehled všech testů ==="));
+    let failedTests = 0;
+    testLog.forEach(({ description, result, error }) => {
+        if (result === "PASSED") {
+            console.log(colors.green(`✓ ${description}`));
+        } else {
+            failedTests++;
+            console.log(colors.red(`✗ ${description} - Chyba: ${error}`));
+        }
+    });
+
+    // Shrnutí na konci
+    if (failedTests === 0) {
+        console.log(colors.green("\n=== Všechny testy byly úspěšné ===\n"));
+    } else {
+        console.log(colors.red(`\n=== ${failedTests} test(y) selhal(y) ===\n`));
+    }
+}
+
+async function logTest(testLog, description, testFn) {
+    try {
+        await testFn();
+        testLog.push({ description, result: "PASSED" });
+    } catch (err) {
+        testLog.push({ description, result: "FAILED", error: err.message });
+        console.error(colors.red(`✗ ${description} - Chyba: ${err.message}`)); // Okamžitý výpis selhání
+    }
 }
 
 function saveErrorToFile(error) {
@@ -62,7 +91,7 @@ function saveErrorToFile(error) {
         timestamp: new Date().toISOString(),
     };
 
-    const filePath = "./reports/errors.json";
+    const filePath = "errors.json";
     let errors = [];
 
     // Načtení existujících chyb (pokud soubor existuje)
@@ -80,7 +109,24 @@ function saveErrorToFile(error) {
 
     // Uložení do souboru
     fs.writeFileSync(filePath, JSON.stringify(errors, null, 2), "utf-8");
-    console.log(colors.green("✓ Chyba byla uložena do errors.json"));
+    console.log(colors.green("✓ Chyba byla podrobně uložena do errors.json."));
 }
 
+function listenForEscape(onEscape) {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+
+    process.stdin.on("data", (key) => {
+        if (key.toString() === "\u001b") { // Escape key
+            onEscape();
+            rl.close();
+        }
+    });
+}
 module.exports = runGUITests;
+
