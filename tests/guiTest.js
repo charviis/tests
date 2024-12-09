@@ -2,15 +2,23 @@ const { Builder, By } = require("selenium-webdriver");
 const colors = require("ansi-colors");
 const fs = require("fs");
 const readline = require("readline");
+const chrome = require("selenium-webdriver/chrome");
+const fetch = require("node-fetch"); // Přidání node-fetch
+
+let options = new chrome.Options();
+options.addArguments("--disable-gpu");
+options.addArguments("--disable-software-rasterizer");
+options.addArguments("--use-gl=swiftshader");
+options.addArguments("--disable-dev-shm-usage");
+options.addArguments("--headless");
 
 
-
-
-const TEST_URL = "https://www.chmi.cz/"; // Zadaná URL pro testy
+const TEST_URL = "https://webtesting.free.beeceptor.com"; // Zadaná URL pro testy
+const API_URL = "https://webtesting.free.beeceptor.com"; // Příklad URL API pro fetch test
 
 async function runGUITests() {
     console.log(colors.blue("\n=== Spouštím GUI testy ===\n"));
-    let driver = await new Builder().forBrowser("chrome").build();
+    let driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
     const testLog = []; // Pole pro ukládání výsledků testů
 
     // Nastavení zachytávání klávesnice
@@ -46,6 +54,18 @@ async function runGUITests() {
             const factElement = await driver.findElement(By.css(".fact-display"));
             const isDisplayed = await factElement.isDisplayed();
             if (!isDisplayed) throw new Error("Element není viditelný.");
+        });
+
+        // Test 6: Fetch API test
+        await logTest(testLog, "[TEST] API Fetch na " + API_URL, async () => {
+            const response = await fetch(API_URL);
+            if (!response.ok) {
+                throw new Error(`API odpovědělo s chybovým stavem: ${response.status}`);
+            }
+            const data = await response.json();
+            if (!data || !data.fact) {
+                throw new Error("API nevrátilo očekávaná data.");
+            }
         });
     } catch (err) {
         console.error(colors.red("✗ Chyba během provádění testů: " + err.message));
@@ -128,5 +148,5 @@ function listenForEscape(onEscape) {
         }
     });
 }
-module.exports = runGUITests;
 
+module.exports = runGUITests;
